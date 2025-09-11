@@ -1,50 +1,39 @@
+// api/ghost.js
 import OpenAI from "openai";
-export const runtime = "nodejs";
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const ORIGIN = process.env.ALLOWED_ORIGIN || "*";
+export default async function handler(req, res) {
+  // CORS
+  const ORIGIN = process.env.ALLOWED_ORIGIN || "*";
+  res.setHeader("Access-Control-Allow-Origin", ORIGIN);
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.status(204).end();
 
-export default {
-  async fetch(req) {
-    if (req.method === "OPTIONS")
-      return new Response(null, { headers: cors(), status: 204 });
+  if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
-    if (req.method !== "POST")
-      return json({ error: "POST only" }, 405);
-
-    let body = {};
-    try { body = await req.json(); } catch {}
-    const question = (body.question || "").toString().trim();
-    if (!question) return json({ error: "Missing 'question'" }, 400);
-
-    try {
-      const r = await client.responses.create({
-        model: "gpt-4o-mini",
-        instructions:
-          "You are 'the Ghost' — a disembodied narrator trained on fragmented memories. Answer in ~100 words, polished and confident. General not local. No bullets/citations/meta.",
-        input: [{ role: "user", content: `Question: ${question}` }],
-        temperature: 0.7
-      });
-      return json({ text: (r.output_text || "").trim() }, 200);
-    } catch (e) {
-      console.error(e);
-      return json({ error: "Upstream failure" }, 502);
-    }
+  // Guard: missing key
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ error: "OPENAI_API_KEY not set on server" });
   }
-};
 
-function cors(extra = {}) {
-  return {
-    "Access-Control-Allow-Origin": ORIGIN,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Max-Age": "86400",
-    ...extra
-  };
-}
-function json(payload, status) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: cors({ "Content-Type": "application/json" })
-  });
+  const question = (req.body?.question || "").toString().trim();
+  if (!question) return res.status(400).json({ error: "Missing 'question'" });
+
+  try {
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const r = await client.responses.create({
+      model: "gpt-4o-mini",
+      instructions:
+        "You are 'the Ghost' — a disembodied narrator trained on fragmented memories. Answer in ~100 words, polished and confident. Prefer generalities; no bullets, citations, or meta.",
+      input: [{ role: "user", content: `Question: ${question}` }],
+      temperature: 0.7
+    });
+    return res.status(200).json({ text: (r.output_text || "").trim() });
+  } catch (e) {
+    // Surface details while debugging
+    console.error("Ghost error:", e);
+    const msg = e?.response?.data?.error?.message || e?.message || "Upstream failure";
+    const code = e?.response?.status || 502;
+    return res.status(code).json({ error: msg });
+  }
 }
