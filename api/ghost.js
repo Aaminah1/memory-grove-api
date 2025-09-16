@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "HF_API_TOKEN not set on server" });
   }
 
-  // ----- Parse body (supports raw body on Vercel) -----
+  // ----- Parse body (works with raw body on Vercel) -----
   let body = req.body;
   if (!body || typeof body !== "object") {
     try { body = JSON.parse(await readRaw(req) || "{}"); } catch { body = {}; }
@@ -51,8 +51,7 @@ Ghost:`;
         },
         body: JSON.stringify({
           inputs: prompt,
-          // make free-tier friendlier: auto-wait for model warmup
-          options: { wait_for_model: true },
+          options: { wait_for_model: true }, // free tier cold-start helper
           parameters: {
             max_new_tokens: 180,
             temperature: 0.8,
@@ -64,11 +63,11 @@ Ghost:`;
       }
     );
 
-    const rawText = await hfRes.text(); // read once
+    const rawText = await hfRes.text();
     let data;
     try { data = JSON.parse(rawText); } catch { data = rawText; }
 
-    // Non-2xx → surface exact HF message back to the browser
+    // If HF returns non-2xx, surface the real message
     if (!hfRes.ok) {
       const msg = typeof data === "string"
         ? `${hfRes.status} ${hfRes.statusText}: ${data.slice(0, 500)}`
@@ -76,7 +75,7 @@ Ghost:`;
       return res.status(hfRes.status).json({ error: msg });
     }
 
-    // Possible shapes: array with {generated_text}, object with generated_text, or string
+    // Possible shapes from HF
     let text =
       (Array.isArray(data) && data[0]?.generated_text) ||
       (typeof data === "object" && data?.generated_text) ||
