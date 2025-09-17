@@ -1,11 +1,10 @@
-// api/ghost.js — Hugging Face version with detailed error surfacing
 const ALLOWED = (process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN || "")
   .split(",").map(s => s.trim()).filter(Boolean);
 
 const HF_MODEL = process.env.HF_MODEL || "google/gemma-2b-it";
 
 export default async function handler(req, res) {
-  // ----- CORS -----
+  // CORS
   const reqOrigin = req.headers.origin || "";
   const allow = ALLOWED.includes(reqOrigin) ? reqOrigin : (ALLOWED.length === 1 ? ALLOWED[0] : "");
   if (allow) {
@@ -16,15 +15,9 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(204).end();
 
-  // ----- Method guard -----
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+  if (!process.env.HF_API_TOKEN) return res.status(500).json({ error: "HF_API_TOKEN not set on server" });
 
-  // ----- Token guard -----
-  if (!process.env.HF_API_TOKEN) {
-    return res.status(500).json({ error: "HF_API_TOKEN not set on server" });
-  }
-
-  // ----- Parse body (works with raw body on Vercel) -----
   let body = req.body;
   if (!body || typeof body !== "object") {
     try { body = JSON.parse(await readRaw(req) || "{}"); } catch { body = {}; }
@@ -51,7 +44,7 @@ Ghost:`;
         },
         body: JSON.stringify({
           inputs: prompt,
-          options: { wait_for_model: true }, // free tier cold-start helper
+          options: { wait_for_model: true },
           parameters: {
             max_new_tokens: 180,
             temperature: 0.8,
@@ -63,11 +56,9 @@ Ghost:`;
       }
     );
 
-    const rawText = await hfRes.text();
-    let data;
-    try { data = JSON.parse(rawText); } catch { data = rawText; }
+    const raw = await hfRes.text();
+    let data; try { data = JSON.parse(raw); } catch { data = raw; }
 
-    // If HF returns non-2xx, surface the real message
     if (!hfRes.ok) {
       const msg = typeof data === "string"
         ? `${hfRes.status} ${hfRes.statusText}: ${data.slice(0, 500)}`
@@ -75,12 +66,10 @@ Ghost:`;
       return res.status(hfRes.status).json({ error: msg });
     }
 
-    // Possible shapes from HF
     let text =
       (Array.isArray(data) && data[0]?.generated_text) ||
       (typeof data === "object" && data?.generated_text) ||
-      (typeof data === "string" ? data : "") ||
-      "";
+      (typeof data === "string" ? data : "") || "";
 
     if (!text) text = "The ghost is silent…";
     text = stripEcho(text, prompt);
@@ -95,7 +84,7 @@ Ghost:`;
 function readRaw(req) {
   return new Promise((resolve) => {
     let data = "";
-    req.on("data", (chunk) => (data += chunk));
+    req.on("data", (c) => (data += c));
     req.on("end", () => resolve(data));
     req.on("error", () => resolve(""));
   });
