@@ -1,4 +1,3 @@
-// api/ghost.js — minimal CORS sanity
 const ORIGINS = (process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN || "")
   .split(",").map(s => s.trim()).filter(Boolean);
 
@@ -23,12 +22,12 @@ export default async function handler(req, res) {
   setCORS(req, res);
 
   if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method === "GET")   return json(res, 200, { ok: true, note: "ghost alive" });
-  if (req.method !== "POST")  return json(res, 405, { error: "POST only" });
+  if (req.method === "GET")     return json(res, 200, { ok: true, note: "ghost alive" });
+  if (req.method !== "POST")    return json(res, 405, { error: "POST only" });
 
-  // Echo back what we got so we can see it in the browser/devtools
+  // Echo request body so we can see it from your website
   let raw = "";
-  await new Promise((r) => { req.on("data", c => raw+=c); req.on("end", r); req.on("error", r); });
+  await new Promise(r => { req.on("data", c => raw+=c); req.on("end", r); req.on("error", r); });
   let body = {};
   try { body = raw ? JSON.parse(raw) : (typeof req.body === "object" ? req.body : {}); } catch {}
   return json(res, 200, { ok: true, received: body, origin: req.headers.origin || "" });
