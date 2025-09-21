@@ -1,5 +1,8 @@
 {
   "name": "memory-grove-api",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "openai": "^4.57.1"
+  }
 }
