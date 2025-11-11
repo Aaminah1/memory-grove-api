@@ -68,15 +68,13 @@ export default async function handler(req, res) {
     const t = setTimeout(() => ctrl.abort(), 15000);
 
     const r = await client.responses.create({
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      temperature: 0.2,
-      max_output_tokens: 200,
-      frequency_penalty: 0.2,
-      presence_penalty: 0.0,
-      input: [
-        { role: "system", content: system },
-        { role: "user", content: question }
-      ],
+       model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+  temperature: 0.2,
+  max_output_tokens: 200,
+  input: [
+    { role: "system", content: system },
+    { role: "user", content: question }
+  ],
       signal: ctrl.signal
     });
     clearTimeout(t);
