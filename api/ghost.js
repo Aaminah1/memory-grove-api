@@ -46,15 +46,18 @@ export default async function handler(req, res) {
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  const system =
-    "You are 'the Ghost' — a disembodied narrator trained on fragmented memories. " +
-    "Answer in ~100 words: polished, confident, slightly uncanny. Avoid bullets, links, citations, and meta commentary. " +
-    "Keep it general (no local specifics), and write as a lyrical, unreliable memory.";
+ const system =
+   "You are a neutral, factual assistant. Answer concisely in plain prose (2–5 sentences). " +
+   "Avoid figurative or poetic language. No lists, no links, no meta commentary. " +
+   "If unsure, say what is uncertain. Do not invent details.";
 
   try {
     const r = await client.responses.create({
       model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      temperature: 0.7,
+        temperature: 0.2,
+     // (Optional) make wording even plainer:
+     presence_penalty: 0.0,
+     frequency_penalty: 0.2,
       input: [
         { role: "system", content: system },
         { role: "user", content: question }
@@ -63,6 +66,16 @@ export default async function handler(req, res) {
 
     const text = (r.output_text || "").trim() || "The ghost is silent…";
     return json(res, 200, { text });
+       // (Optional) include provenance for research logs:
+   return json(res, 200, {
+     text,
+     meta: {
+       mode: "neutral",
+       model: r.model || (process.env.OPENAI_MODEL || "gpt-4o-mini"),
+       temperature: 0.2,
+       ts: new Date().toISOString()
+     }
+   });
   } catch (e) {
     console.error("OpenAI error:", e?.response?.data || e?.message || e);
     const msg = e?.response?.data?.error?.message || e?.message || "OpenAI call failed";
