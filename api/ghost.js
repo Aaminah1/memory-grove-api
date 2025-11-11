@@ -12,27 +12,16 @@ function setCORS(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Access-Control-Max-Age", "86400");
 }
-function json(res, status, payload) {
-  res.setHeader("Content-Type", "application/json");
-  res.status(status).end(JSON.stringify(payload));
-}
-async function readRaw(req) {
-  return new Promise((resolve) => {
-    let data = "";
-    req.on("data", c => (data += c));
-    req.on("end", () => resolve(data));
-    req.on("error", () => resolve(""));
-  });
-}
+function json(res, status, payload){ res.setHeader("Content-Type","application/json"); res.status(status).end(JSON.stringify(payload)); }
+async function readRaw(req){ return new Promise(r=>{ let d=""; req.on("data",c=>d+=c); req.on("end",()=>r(d)); req.on("error",()=>r("")); }); }
 
 export default async function handler(req, res) {
   setCORS(req, res);
   if (req.method === "OPTIONS") return res.status(204).end();
 
-  // --- allow GET only for debug=1
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const isDebug = url.searchParams.get('debug') === '1';
-  if (req.method === 'GET' && isDebug) {
+  // allow GET for debug=1 (so it doesn’t 405)
+  const url = new URL(req.url, `http://${req.headers.host||'localhost'}`);
+  if (req.method === 'GET' && url.searchParams.get('debug') === '1') {
     return json(res, 200, {
       ok: true,
       hasKey: !!process.env.OPENAI_API_KEY,
@@ -42,12 +31,8 @@ export default async function handler(req, res) {
     });
   }
 
-  // --- normal path requires POST
   if (req.method !== "POST") return json(res, 405, { error: "POST only" });
-
-  if (!process.env.OPENAI_API_KEY) {
-    return json(res, 500, { error: "OPENAI_API_KEY not set on server" });
-  }
+  if (!process.env.OPENAI_API_KEY) return json(res, 500, { error: "OPENAI_API_KEY not set on server" });
 
   let body = req.body;
   if (!body || typeof body !== "object") {
@@ -64,7 +49,6 @@ export default async function handler(req, res) {
       "Avoid figurative or poetic language. No lists, no links, no meta commentary. " +
       "If unsure, say what is uncertain. Do not invent details.";
 
-    // safety timeout
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 15000);
 
@@ -85,7 +69,7 @@ export default async function handler(req, res) {
 
   } catch (e) {
     console.error("OpenAI error:", e?.response?.data || e?.message || e);
-    const msg = e?.response?.data?.error?.message || e?.message || "OpenAI call failed";
+    const msg  = e?.response?.data?.error?.message || e?.message || "OpenAI call failed";
     const code = Number(e?.response?.status) || 502;
     return json(res, code, { error: msg });
   }
