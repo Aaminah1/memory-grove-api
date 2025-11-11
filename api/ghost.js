@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-// ----- CORS -----
+// ----- CORS helpers (unchanged) -----
 const ORIGINS = (process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN || "")
   .split(",").map(s => s.trim()).filter(Boolean);
 
@@ -28,6 +28,7 @@ async function readRaw(req) {
   });
 }
 
+
 export default async function handler(req, res) {
   setCORS(req, res);
   if (req.method === "OPTIONS") return res.status(204).end();
@@ -46,18 +47,18 @@ export default async function handler(req, res) {
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
- const system =
-   "You are a neutral, factual assistant. Answer concisely in plain prose (2–5 sentences). " +
-   "Avoid figurative or poetic language. No lists, no links, no meta commentary. " +
-   "If unsure, say what is uncertain. Do not invent details.";
+  const system =
+    "You are a neutral, factual assistant. Answer concisely in plain prose (2–5 sentences). " +
+    "Avoid figurative or poetic language. No lists, no links, no meta commentary. " +
+    "If unsure, say what is uncertain. Do not invent details.";
 
   try {
     const r = await client.responses.create({
       model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-        temperature: 0.2,
-     // (Optional) make wording even plainer:
-     presence_penalty: 0.0,
-     frequency_penalty: 0.2,
+      temperature: 0.2,
+      max_output_tokens: 200,        // ← prevent long generations/timeouts
+      frequency_penalty: 0.2,        // ← optional; remove if it errors
+      presence_penalty: 0.0,         // ← optional; safe default
       input: [
         { role: "system", content: system },
         { role: "user", content: question }
@@ -65,21 +66,22 @@ export default async function handler(req, res) {
     });
 
     const text = (r.output_text || "").trim() || "The ghost is silent…";
-    return json(res, 200, { text });
-       // (Optional) include provenance for research logs:
-   return json(res, 200, {
-     text,
-     meta: {
-       mode: "neutral",
-       model: r.model || (process.env.OPENAI_MODEL || "gpt-4o-mini"),
-       temperature: 0.2,
-       ts: new Date().toISOString()
-     }
-   });
+
+    // SINGLE return only:
+    return json(res, 200, {
+      text,
+      meta: {
+        mode: "neutral",
+        model: r.model || (process.env.OPENAI_MODEL || "gpt-4o-mini"),
+        temperature: 0.2,
+        ts: new Date().toISOString()
+      }
+    });
+
   } catch (e) {
     console.error("OpenAI error:", e?.response?.data || e?.message || e);
     const msg = e?.response?.data?.error?.message || e?.message || "OpenAI call failed";
-    const code = e?.response?.status || 502;
+    const code = Number(e?.response?.status) || 502;
     return json(res, code, { error: msg });
   }
 }
