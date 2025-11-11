@@ -93,42 +93,43 @@ const system =
   "Avoid figurative or poetic language. No lists, no links, no meta commentary. " +
   "If unsure, say what is uncertain. Do not invent details.";
 
-// 12s safety timeout
+// create AbortController
 const ctrl = new AbortController();
 const timer = setTimeout(() => ctrl.abort(), 12000);
 
-let text = "";
-
-// NEW SDK path (v4.3+): responses API
+// NEW SDK path
 if (client.responses && typeof client.responses.create === "function") {
-  const r = await client.responses.create({
-    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-    temperature: 0.2,
-    max_output_tokens: 200,
-    input: [
-      { role: "system", content: system },
-      { role: "user", content: question }
-    ],
-    signal: ctrl.signal
-  });
+  const r = await client.responses.create(
+    {
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      temperature: 0.2,
+      max_output_tokens: 200,
+      input: [
+        { role: "system", content: system },
+        { role: "user", content: question }
+      ]
+    },
+    { signal: ctrl.signal }                // <-- move signal here
+  );
   text = (r.output_text || "").trim();
 } else {
-  // OLD SDK path: chat.completions API
-  const r = await client.chat.completions.create({
-    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-    temperature: 0.2,
-    max_tokens: 200,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: question }
-    ],
-    signal: ctrl.signal
-  });
+  // OLD SDK fallback
+  const r = await client.chat.completions.create(
+    {
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      temperature: 0.2,
+      max_tokens: 200,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: question }
+      ]
+    },
+    { signal: ctrl.signal }                // <-- and here
+  );
   text = (r?.choices?.[0]?.message?.content || "").trim();
 }
 
 clearTimeout(timer);
-
 if (!text) text = "The ghost is silent…";
 return json(res, 200, { text });
 
