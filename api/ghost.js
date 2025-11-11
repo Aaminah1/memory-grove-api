@@ -84,31 +84,54 @@ export default async function handler(req, res) {
   if (!question) return json(res, 400, { error: "Missing 'question'" });
 
   try {
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+   // ... inside your try { } in /api/ghost.js
 
-    const system =
-      "You are a neutral, factual assistant. Answer concisely in plain prose (2–5 sentences). " +
-      "Avoid figurative or poetic language. No lists, no links, no meta commentary. " +
-      "If unsure, say what is uncertain. Do not invent details.";
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    // Hard timeout: if OpenAI is slow, abort instead of hanging (causes 504/502)
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 12000); // 12s
+const system =
+  "You are a neutral, factual assistant. Answer concisely in plain prose (2–5 sentences). " +
+  "Avoid figurative or poetic language. No lists, no links, no meta commentary. " +
+  "If unsure, say what is uncertain. Do not invent details.";
 
-    const r = await client.responses.create({
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      temperature: 0.2,
-      max_output_tokens: 200,
-      input: [
-        { role: "system", content: system },
-        { role: "user", content: question }
-      ],
-      signal: ctrl.signal
-    });
-    clearTimeout(timer);
+// 12s safety timeout
+const ctrl = new AbortController();
+const timer = setTimeout(() => ctrl.abort(), 12000);
 
-    const text = (r.output_text || "").trim() || "The ghost is silent…";
-    return json(res, 200, { text });
+let text = "";
+
+// NEW SDK path (v4.3+): responses API
+if (client.responses && typeof client.responses.create === "function") {
+  const r = await client.responses.create({
+    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+    temperature: 0.2,
+    max_output_tokens: 200,
+    input: [
+      { role: "system", content: system },
+      { role: "user", content: question }
+    ],
+    signal: ctrl.signal
+  });
+  text = (r.output_text || "").trim();
+} else {
+  // OLD SDK path: chat.completions API
+  const r = await client.chat.completions.create({
+    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+    temperature: 0.2,
+    max_tokens: 200,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: question }
+    ],
+    signal: ctrl.signal
+  });
+  text = (r?.choices?.[0]?.message?.content || "").trim();
+}
+
+clearTimeout(timer);
+
+if (!text) text = "The ghost is silent…";
+return json(res, 200, { text });
+
 
   } catch (e) {
     // Surface precise reason in the JSON body (so your frontend can show it)

@@ -4,6 +4,6 @@
   "type": "module",
   "engines": { "node": ">=18" },
   "dependencies": {
-    "openai": "~4.57.1"
+    "openai": "4.57.1"
   }
 }
